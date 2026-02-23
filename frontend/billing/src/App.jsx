@@ -14,6 +14,8 @@ import UnderDevelopmentPage from './pages/UnderDevelopmentPage';
 import ViewerDashboardPage from './pages/ViewerDashboardPage';
 import ViewerPlansPage from './pages/ViewerPlansPage';
 import ViewerSettingsPage from './pages/ViewerSettingsPage';
+import ViewerBillingHistoryPage from './pages/ViewerBillingHistoryPage';
+import ViewerPaymentMethodsPage from './pages/ViewerPaymentMethodsPage';
 
 const pageMeta = {
   '/dashboard': { title: 'Dashboard Overview', subtitle: 'Welcome back to your financial hub.' },
@@ -83,8 +85,8 @@ function ViewerLayout() {
         <Routes>
           <Route path="/" element={<ViewerDashboardPage />} />
           <Route path="/plans" element={<ViewerPlansPage />} />
-          <Route path="/billing-history" element={<UnderDevelopmentPage />} />
-          <Route path="/payment-methods" element={<UnderDevelopmentPage />} />
+          <Route path="/billing-history" element={<ViewerBillingHistoryPage />} />
+          <Route path="/payment-methods" element={<ViewerPaymentMethodsPage />} />
           <Route path="/settings" element={<ViewerSettingsPage />} />
         </Routes>
       </main>
