@@ -1,10 +1,130 @@
-import { useState } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+
+const initialSubscriptions = [
+    {
+        id: 'adobe',
+        name: 'Adobe Creative Cloud',
+        description: 'Design Pro Bundle • 1 User',
+        icon: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA2z8ekZlj6mSsQV_CfVnVCAKtTrZT-3w5f40DlzJEi4UUFbzlGulhU8JHioZr5JHOqTkwgoKGBbp0c9EypjsQJQx17ea23PJ8J7UV5gAzc1DW5ES83CBnsV7bAUwNofVrTQ2i1g7fboUUJW7L4IllmDyzJY03OvcEKvMWvnJZv3DgqVpPzSDoFZIx6Z0w2FpB4xoGJojQuhzwj5mWkbdnrwx1lp3dSstS4AWq_p2J1NAcBHEA3HCfRoJgBTRBs9F3bDxSW6ndYTYc',
+        status: 'Renews in 3 days',
+        statusColor: 'orange',
+        cost: 2499,
+        dateStr: 'Oct 24, 2023',
+        timestamp: new Date('2023-10-24').getTime(),
+        state: 'active',
+        nextAction: 'Next'
+    },
+    {
+        id: 'netflix',
+        name: 'Netflix',
+        description: 'Premium Ultra HD • 4 Screens',
+        icon: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD2lFOSvhpb-A2KzgdNTQ9Ng48LEyQUdcrbQqdOflhSdYZXz_r4o2CYpZjQUK25aD4wHriIDD2y1nTF0fvR4KBaO_izGqg_1C6hyXHaoY3y1uIfPv_bj16LiTOkzEgkPW0HB8nv5phm9m-SpHTkWU4RYr-_RwVlI6Ylk4dSDggmymurPOdDTmIOzUiY8pQNyOUyeFM3yhfimWzFzkmfokHxFJlbiV5jObBBXjl_EFe-2xSz4PJFK0GHJoeb2nACVPgbRUMvIEutCYI',
+        status: 'Active',
+        statusColor: 'green',
+        cost: 1349,
+        dateStr: 'Nov 02, 2023',
+        timestamp: new Date('2023-11-02').getTime(),
+        state: 'active',
+        nextAction: 'Next'
+    },
+    {
+        id: 'spotify',
+        name: 'Spotify',
+        description: 'Student Plan',
+        icon: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA5wgtJsEvLehpIsOm85_B8A1NvSz-JYNegfJYVr77EcWp_jAA116FpkH_rW8eFlmV2W1HNLSuQEGDiBTHG2EoNLfdTNukimEuFb9t5T1Jw16hlS4tziy_OS2fuKoWggh_QFoVlG9Roj1Db2WhBtmPyvK8gxmhnzhaTXdhaxPeTXHACw_0imMzVfmXeVvMy5-STRgKqxpZKP6L2rIWplVnB9GSQ6cndcBujUjeE3KohCwpe1hrkM9BKm2ybB3eE67C9QrPNl2UH0DQ',
+        status: 'Paused',
+        statusColor: 'slate',
+        cost: 419,
+        dateStr: 'Dec 01, 2023',
+        timestamp: new Date('2023-12-01').getTime(),
+        state: 'paused',
+        nextAction: 'Resumes'
+    }
+];
 
 export default function ViewerDashboardPage() {
+    const navigate = useNavigate();
     const [openDropdown, setOpenDropdown] = useState(null);
+    const [subscriptions, setSubscriptions] = useState(initialSubscriptions);
+    const [sortOrder, setSortOrder] = useState('default'); // default, date, cost
+    const [filterState, setFilterState] = useState('all'); // all, active, paused
+
+    // filter dropdown refs
+    const filterRef = useRef(null);
+    const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+
+    // sort dropdown refs
+    const sortRef = useRef(null);
+    const [showSortDropdown, setShowSortDropdown] = useState(false);
+
+    // Close dropdowns on outside click
+    useEffect(() => {
+        function handleClickOutside(e) {
+            if (filterRef.current && !filterRef.current.contains(e.target)) {
+                setShowFilterDropdown(false);
+            }
+            if (sortRef.current && !sortRef.current.contains(e.target)) {
+                setShowSortDropdown(false);
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const toggleDropdown = (id) => {
         setOpenDropdown(openDropdown === id ? null : id);
+    };
+
+    const handleAction = (id, action) => {
+        setSubscriptions(subs => subs.map(sub => {
+            if (sub.id !== id) return sub;
+            if (action === 'cancel') {
+                return { ...sub, status: 'Cancelled', state: 'cancelled', statusColor: 'red', nextAction: 'Cancelled' };
+            }
+            if (action === 'pause') {
+                return { ...sub, status: 'Paused', state: 'paused', statusColor: 'slate', nextAction: 'Resumes' };
+            }
+            if (action === 'resume') {
+                return { ...sub, status: 'Active', state: 'active', statusColor: 'green', nextAction: 'Next' };
+            }
+            return sub;
+        }));
+        setOpenDropdown(null);
+    };
+
+    const totalSpend = subscriptions.filter(s => s.state === 'active').reduce((acc, curr) => acc + curr.cost, 0);
+    const activePlansCount = subscriptions.filter(s => s.state === 'active').length;
+
+    // sort by timestamp ascending (earliest first)
+    const activeSubsGtNow = subscriptions.filter(s => s.state === 'active').sort((a, b) => a.timestamp - b.timestamp);
+    const nextBillingDateState = activeSubsGtNow.length > 0 ? activeSubsGtNow[0] : null;
+
+    const filteredAndSortedSubs = useMemo(() => {
+        let result = [...subscriptions];
+        // filter
+        if (filterState !== 'all') {
+            result = result.filter(s => s.state === filterState);
+        }
+        // sort
+        if (sortOrder === 'cost') {
+            result.sort((a, b) => b.cost - a.cost); // highest first
+        } else if (sortOrder === 'date') {
+            result.sort((a, b) => a.timestamp - b.timestamp); // earliest first
+        }
+        return result;
+    }, [subscriptions, sortOrder, filterState]);
+
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
+    };
+
+    const getStatusBadgeClass = (color) => {
+        if (color === 'orange') return 'bg-orange-500/10 text-orange-400 border border-orange-500/20';
+        if (color === 'green') return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+        if (color === 'slate') return 'bg-slate-800 text-slate-400 border border-slate-700';
+        if (color === 'red') return 'bg-red-500/10 text-red-400 border border-red-500/20';
+        return 'bg-slate-800 text-slate-400 border border-slate-700';
     };
 
     return (
@@ -21,7 +141,7 @@ export default function ViewerDashboardPage() {
                         <h1 className="text-white text-3xl lg:text-4xl font-extrabold tracking-tight">My Subscriptions</h1>
                         <p className="text-slate-400 text-base mt-2">Manage your active plans, track spending, and handle renewals.</p>
                     </div>
-                    <button className="bg-primary hover:bg-primary-dark text-white transition-colors rounded-full px-6 py-3 text-sm font-bold flex items-center gap-2 shadow-lg shadow-primary/20">
+                    <button onClick={() => navigate('/viewer/plans')} className="bg-primary hover:bg-primary-dark text-white transition-colors rounded-full px-6 py-3 text-sm font-bold flex items-center gap-2 shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98]">
                         <span className="material-symbols-outlined text-[18px]">add</span>
                         Add New Service
                     </button>
@@ -31,64 +151,59 @@ export default function ViewerDashboardPage() {
             {/* Summary Cards */}
             <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Total Spend */}
-                <div className="bg-surface-dark p-6 lg:p-8 rounded-2xl shadow-lg shadow-black/10 flex flex-col justify-between h-full border border-slate-800 group hover:border-primary/30 transition-all">
+                <div className="bg-surface-dark p-6 lg:p-8 rounded-2xl shadow-lg shadow-black/10 flex flex-col justify-between h-full border border-slate-800 group transition-all">
                     <div className="flex justify-between items-start mb-4">
                         <div className="p-3 bg-primary/10 rounded-full text-primary">
                             <span className="material-symbols-outlined">payments</span>
                         </div>
-                        <span className="px-3 py-1 rounded-full bg-green-500/10 text-green-400 text-xs font-bold flex items-center gap-1">
+                        <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-bold flex items-center gap-1">
                             <span className="material-symbols-outlined text-[14px]">trending_up</span>
                             +2.4%
                         </span>
                     </div>
                     <div>
                         <p className="text-slate-400 text-sm font-medium mb-1">Total Monthly Spend</p>
-                        <p className="text-white text-3xl lg:text-4xl font-extrabold tracking-tight">₹4,200</p>
+                        <p className="text-white text-3xl lg:text-4xl font-extrabold tracking-tight">{formatCurrency(totalSpend)}</p>
                     </div>
                 </div>
 
                 {/* Next Billing */}
-                <div className="bg-surface-dark p-6 lg:p-8 rounded-2xl shadow-lg shadow-black/10 flex flex-col justify-between h-full border border-slate-800 group hover:border-primary/30 transition-all">
+                <div className="bg-surface-dark p-6 lg:p-8 rounded-2xl shadow-lg shadow-black/10 flex flex-col justify-between h-full border border-slate-800 group transition-all">
                     <div className="flex justify-between items-start mb-4">
                         <div className="p-3 bg-orange-500/10 rounded-full text-orange-400">
                             <span className="material-symbols-outlined">event</span>
                         </div>
-                        <span className="px-3 py-1 rounded-full bg-slate-800 text-slate-400 text-xs font-bold">In 3 days</span>
+                        {nextBillingDateState && (
+                            <span className="px-3 py-1 rounded-full bg-slate-800 text-slate-400 text-xs font-bold">Upcoming</span>
+                        )}
                     </div>
                     <div>
                         <p className="text-slate-400 text-sm font-medium mb-1">Next Billing Date</p>
-                        <p className="text-white text-2xl lg:text-3xl font-bold tracking-tight">Oct 24, 2023</p>
-                        <p className="text-slate-500 text-sm mt-1">Adobe Creative Cloud</p>
+                        <p className="text-white text-2xl lg:text-3xl font-bold tracking-tight">{nextBillingDateState ? nextBillingDateState.dateStr : '-'}</p>
+                        <p className="text-slate-500 text-sm mt-1">{nextBillingDateState ? nextBillingDateState.name : 'No active subscriptions'}</p>
                     </div>
                 </div>
 
                 {/* Active Plans Count */}
-                <div className="bg-surface-dark p-6 lg:p-8 rounded-2xl shadow-lg shadow-black/10 flex flex-col justify-between h-full border border-slate-800 group hover:border-primary/30 transition-all">
+                <div className="bg-surface-dark p-6 lg:p-8 rounded-2xl shadow-lg shadow-black/10 flex flex-col justify-between h-full border border-slate-800 group transition-all">
                     <div className="flex justify-between items-start mb-4">
                         <div className="p-3 bg-purple-500/10 rounded-full text-purple-400">
                             <span className="material-symbols-outlined">layers</span>
                         </div>
-                        <button className="text-primary text-sm font-bold hover:underline">View All</button>
+                        <button onClick={() => navigate('/viewer/plans')} className="text-primary text-sm font-bold hover:underline transition-all">View All Plans</button>
                     </div>
                     <div>
                         <p className="text-slate-400 text-sm font-medium mb-1">Active Services</p>
-                        <p className="text-white text-2xl lg:text-3xl font-bold tracking-tight">3 Plans</p>
+                        <p className="text-white text-2xl lg:text-3xl font-bold tracking-tight">{activePlansCount} Plans</p>
                         <div className="flex -space-x-2 mt-3 overflow-hidden">
-                            <img
-                                alt="Adobe"
-                                className="inline-block h-6 w-6 rounded-full ring-2 ring-surface-dark"
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDgqU0FzSxT-aqxMhTep9I4Mwa6Ut29-WXV9zrW6pfDfLC6t2UKiL-GF2PUonWaWw9E03I1dSOpdqmDf2VFK3cghizeq7rce8OCga9ZRB05-dCTOQ-oz11hqZPrwAdSGSiojRZNJT3jaGNU9th4S7xsWyA0Lu4elK5qLRjAaB72oJw3EyyeId_e7CIb6_1NnsgLhbTb_8och49XkJ4chn2R_cuGOrUPD8fVB-9U8N1hl-84uq7ED9OL1qBMWX46slqTnjZkqzeMGBI"
-                            />
-                            <img
-                                alt="Netflix"
-                                className="inline-block h-6 w-6 rounded-full ring-2 ring-surface-dark"
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuB7dX6m7k325FPcbhrBcHTksK0lQ0I4izpEC2bclVA0GqE9d56QUJmY9MSlLYxn0IXar6LA2S9EXC09bNdvN6I-N492Uxs82-XfYGxT2EnhMuqPxKDC-OYmCwOWATqkLh1cWp8TbxbCfzFqen9iSiuezmA-pKxWnyQGeJtj7USWmeCzlknVxCJeL7e4qE3vCVH1ifRNvrYaBmaPlSUcrHhPZRah-Bmr7IoC0YAXWqii-zoXh_DE4NOdDcHr9LKDrc3hcD0O5t1foQ8"
-                            />
-                            <img
-                                alt="Spotify"
-                                className="inline-block h-6 w-6 rounded-full ring-2 ring-surface-dark"
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfwppjUr6mmbDhqW0IUAtrsKsbk7yxlaGs81Ff-aR2t31Q8ZmA3hV5yUto_-epO4jWgFpkyCo_v-e5me7BA9ebwuk9vAS2D4-493tTwqoZn8k6E_Waq96rNqBBtJDUA1CUtMUhF_eCUeG6y7ci-aj_BAY_ouyLJ7DiIp-8mm0wiOrtfJ95brJWpvw0-ECGAyu5rIPj07OpvzxxL80vvmIDRsq0AMrR-SnQM1A3v0Fjvn9wbrXydfA0BjUlWvfGxAdMb7ulgMjy__s"
-                            />
+                            {subscriptions.filter(s => s.state === 'active').slice(0, 3).map((sub) => (
+                                <img
+                                    key={sub.id}
+                                    alt={sub.name}
+                                    className="inline-block h-6 w-6 rounded-full ring-2 ring-surface-dark object-contain bg-slate-800 p-0.5"
+                                    src={sub.icon}
+                                />
+                            ))}
                         </div>
                     </div>
                 </div>
@@ -97,134 +212,126 @@ export default function ViewerDashboardPage() {
             {/* Active Subscriptions List */}
             <section className="flex flex-col gap-6">
                 <div className="flex items-center justify-between px-2">
-                    <h2 className="text-white text-xl font-bold">Active Subscriptions</h2>
+                    <h2 className="text-white text-xl font-bold">Subscriptions</h2>
                     <div className="flex gap-2">
-                        <button className="p-2 rounded-full hover:bg-slate-800 text-slate-400 transition-colors">
-                            <span className="material-symbols-outlined">filter_list</span>
-                        </button>
-                        <button className="p-2 rounded-full hover:bg-slate-800 text-slate-400 transition-colors">
-                            <span className="material-symbols-outlined">sort</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div className="flex flex-col gap-4">
-                    {/* Card 1: Adobe */}
-                    <div className="bg-surface-dark rounded-2xl p-6 flex flex-col md:flex-row items-start md:items-center gap-6 shadow-lg shadow-black/10 border border-slate-800 hover:border-slate-700 transition-all">
-                        {/* Icon */}
-                        <div className="flex-shrink-0 h-16 w-16 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
-                            <img
-                                alt="Adobe"
-                                className="w-8 h-8 object-contain"
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuA2z8ekZlj6mSsQV_CfVnVCAKtTrZT-3w5f40DlzJEi4UUFbzlGulhU8JHioZr5JHOqTkwgoKGBbp0c9EypjsQJQx17ea23PJ8J7UV5gAzc1DW5ES83CBnsV7bAUwNofVrTQ2i1g7fboUUJW7L4IllmDyzJY03OvcEKvMWvnJZv3DgqVpPzSDoFZIx6Z0w2FpB4xoGJojQuhzwj5mWkbdnrwx1lp3dSstS4AWq_p2J1NAcBHEA3HCfRoJgBTRBs9F3bDxSW6ndYTYc"
-                            />
-                        </div>
-                        {/* Details */}
-                        <div className="flex-grow flex flex-col gap-1">
-                            <div className="flex items-center gap-3 flex-wrap">
-                                <h3 className="text-lg font-bold text-white">Adobe Creative Cloud</h3>
-                                <span className="bg-orange-500/10 text-orange-400 px-3 py-1 rounded-full text-xs font-bold border border-orange-500/20">Renews in 3 days</span>
-                            </div>
-                            <p className="text-slate-400 text-sm">Design Pro Bundle • 1 User</p>
-                        </div>
-                        {/* Cost & Date */}
-                        <div className="flex flex-row md:flex-col justify-between w-full md:w-auto md:text-right gap-1 items-center md:items-end border-t md:border-t-0 border-slate-800 pt-4 md:pt-0 mt-2 md:mt-0">
-                            <span className="text-lg font-bold text-white">$29.00<span className="text-sm font-normal text-slate-500">/mo</span></span>
-                            <span className="text-xs text-slate-500 font-medium">Next: Oct 24, 2023</span>
-                        </div>
-                        {/* Action */}
-                        <div className="flex-shrink-0 w-full md:w-auto">
-                            <button className="w-full md:w-auto px-6 py-2.5 rounded-full bg-slate-800 text-slate-300 font-bold text-sm hover:bg-primary hover:text-white transition-all border border-slate-700 hover:border-primary flex items-center justify-center gap-2 group/btn">
-                                <span>Manage</span>
-                                <span className="material-symbols-outlined text-[18px] group-hover/btn:rotate-90 transition-transform">expand_more</span>
+                        {/* Filter Toggle */}
+                        <div className="relative" ref={filterRef}>
+                            <button onClick={() => setShowFilterDropdown(!showFilterDropdown)} className={`p-2 rounded-full transition-colors flex items-center justify-center ${filterState !== 'all' ? 'bg-primary/20 text-primary' : 'hover:bg-slate-800 text-slate-400'}`} title="Filter by Status">
+                                <span className="material-symbols-outlined">filter_list</span>
                             </button>
+                            {showFilterDropdown && (
+                                <div className="absolute right-0 top-full mt-2 w-48 bg-surface-dark rounded-xl shadow-xl border border-slate-700 py-2 z-30">
+                                    {['all', 'active', 'paused', 'cancelled'].map(opt => (
+                                        <button
+                                            key={opt}
+                                            onClick={() => { setFilterState(opt); setShowFilterDropdown(false); }}
+                                            className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors ${filterState === opt ? 'bg-primary/10 text-primary' : 'text-slate-300 hover:bg-slate-800'}`}
+                                        >
+                                            {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                    </div>
 
-                    {/* Card 2: Netflix */}
-                    <div className="bg-surface-dark rounded-2xl p-6 flex flex-col md:flex-row items-start md:items-center gap-6 shadow-lg shadow-black/10 border border-slate-800 hover:border-slate-700 transition-all">
-                        {/* Icon */}
-                        <div className="flex-shrink-0 h-16 w-16 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
-                            <img
-                                alt="Netflix"
-                                className="w-8 h-8 object-contain"
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuD2lFOSvhpb-A2KzgdNTQ9Ng48LEyQUdcrbQqdOflhSdYZXz_r4o2CYpZjQUK25aD4wHriIDD2y1nTF0fvR4KBaO_izGqg_1C6hyXHaoY3y1uIfPv_bj16LiTOkzEgkPW0HB8nv5phm9m-SpHTkWU4RYr-_RwVlI6Ylk4dSDggmymurPOdDTmIOzUiY8pQNyOUyeFM3yhfimWzFzkmfokHxFJlbiV5jObBBXjl_EFe-2xSz4PJFK0GHJoeb2nACVPgbRUMvIEutCYI"
-                            />
-                        </div>
-                        {/* Details */}
-                        <div className="flex-grow flex flex-col gap-1">
-                            <div className="flex items-center gap-3 flex-wrap">
-                                <h3 className="text-lg font-bold text-white">Netflix</h3>
-                                <span className="bg-green-500/10 text-green-400 px-3 py-1 rounded-full text-xs font-bold border border-green-500/20">Active</span>
-                            </div>
-                            <p className="text-slate-400 text-sm">Premium Ultra HD • 4 Screens</p>
-                        </div>
-                        {/* Cost & Date */}
-                        <div className="flex flex-row md:flex-col justify-between w-full md:w-auto md:text-right gap-1 items-center md:items-end border-t md:border-t-0 border-slate-800 pt-4 md:pt-0 mt-2 md:mt-0">
-                            <span className="text-lg font-bold text-white">$15.99<span className="text-sm font-normal text-slate-500">/mo</span></span>
-                            <span className="text-xs text-slate-500 font-medium">Next: Nov 02, 2023</span>
-                        </div>
-                        {/* Action */}
-                        <div className="flex-shrink-0 w-full md:w-auto relative">
-                            <button
-                                onClick={() => toggleDropdown('netflix')}
-                                className="w-full md:w-auto px-6 py-2.5 rounded-full bg-slate-800 text-slate-300 font-bold text-sm hover:bg-primary hover:text-white transition-all border border-slate-700 hover:border-primary flex items-center justify-center gap-2 group/btn"
-                            >
-                                <span>Manage</span>
-                                <span className="material-symbols-outlined text-[18px] group-hover/btn:rotate-90 transition-transform">expand_more</span>
+                        {/* Sort Toggle */}
+                        <div className="relative" ref={sortRef}>
+                            <button onClick={() => setShowSortDropdown(!showSortDropdown)} className={`p-2 rounded-full transition-colors flex items-center justify-center ${sortOrder !== 'default' ? 'bg-primary/20 text-primary' : 'hover:bg-slate-800 text-slate-400'}`} title="Sort Subscriptions">
+                                <span className="material-symbols-outlined">sort</span>
                             </button>
-                            {/* Dropdown */}
-                            {openDropdown === 'netflix' && (
-                                <div className="absolute right-0 top-full mt-2 w-48 bg-surface-dark rounded-xl shadow-xl border border-slate-700 p-2 z-20">
-                                    <a className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-primary transition-colors cursor-pointer" href="#">
-                                        <span className="material-symbols-outlined text-[18px]">upgrade</span>
-                                        Upgrade Plan
-                                    </a>
-                                    <a className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-primary transition-colors cursor-pointer" href="#">
-                                        <span className="material-symbols-outlined text-[18px]">vertical_align_bottom</span>
-                                        Downgrade
-                                    </a>
-                                    <div className="h-px bg-slate-700 my-1"></div>
-                                    <a className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer" href="#">
-                                        <span className="material-symbols-outlined text-[18px]">cancel</span>
-                                        Cancel Sub
-                                    </a>
+                            {showSortDropdown && (
+                                <div className="absolute right-0 top-full mt-2 w-48 bg-surface-dark rounded-xl shadow-xl border border-slate-700 py-2 z-30">
+                                    <button onClick={() => { setSortOrder('default'); setShowSortDropdown(false); }} className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors ${sortOrder === 'default' ? 'bg-primary/10 text-primary' : 'text-slate-300 hover:bg-slate-800'}`}>Default</button>
+                                    <button onClick={() => { setSortOrder('cost'); setShowSortDropdown(false); }} className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors ${sortOrder === 'cost' ? 'bg-primary/10 text-primary' : 'text-slate-300 hover:bg-slate-800'}`}>Cost (High to Low)</button>
+                                    <button onClick={() => { setSortOrder('date'); setShowSortDropdown(false); }} className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors ${sortOrder === 'date' ? 'bg-primary/10 text-primary' : 'text-slate-300 hover:bg-slate-800'}`}>Next Billing Date</button>
                                 </div>
                             )}
                         </div>
                     </div>
+                </div>
 
-                    {/* Card 3: Spotify */}
-                    <div className="bg-surface-dark rounded-2xl p-6 flex flex-col md:flex-row items-start md:items-center gap-6 shadow-lg shadow-black/10 border border-slate-800 hover:border-slate-700 transition-all opacity-75">
-                        {/* Icon */}
-                        <div className="flex-shrink-0 h-16 w-16 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700 grayscale">
-                            <img
-                                alt="Spotify"
-                                className="w-8 h-8 object-contain"
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5wgtJsEvLehpIsOm85_B8A1NvSz-JYNegfJYVr77EcWp_jAA116FpkH_rW8eFlmV2W1HNLSuQEGDiBTHG2EoNLfdTNukimEuFb9t5T1Jw16hlS4tziy_OS2fuKoWggh_QFoVlG9Roj1Db2WhBtmPyvK8gxmhnzhaTXdhaxPeTXHACw_0imMzVfmXeVvMy5-STRgKqxpZKP6L2rIWplVnB9GSQ6cndcBujUjeE3KohCwpe1hrkM9BKm2ybB3eE67C9QrPNl2UH0DQ"
-                            />
+                <div className="flex flex-col gap-4">
+                    {filteredAndSortedSubs.length === 0 ? (
+                        <div className="bg-surface-dark rounded-2xl p-12 flex flex-col items-center justify-center gap-4 border border-slate-800">
+                            <span className="material-symbols-outlined text-4xl text-slate-600">search_off</span>
+                            <p className="text-slate-400 font-medium pb-2">No subscriptions found.</p>
+                            {(filterState !== 'all' || sortOrder !== 'default') && (
+                                <button onClick={() => { setFilterState('all'); setSortOrder('default'); }} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-all">Clear Filters</button>
+                            )}
                         </div>
-                        {/* Details */}
-                        <div className="flex-grow flex flex-col gap-1">
-                            <div className="flex items-center gap-3 flex-wrap">
-                                <h3 className="text-lg font-bold text-white">Spotify</h3>
-                                <span className="bg-slate-800 text-slate-400 px-3 py-1 rounded-full text-xs font-bold border border-slate-700">Paused</span>
+                    ) : (
+                        filteredAndSortedSubs.map((sub) => (
+                            <div key={sub.id} className={`bg-surface-dark rounded-2xl p-6 flex flex-col md:flex-row items-start md:items-center gap-6 shadow-lg shadow-black/10 border border-slate-800 hover:border-slate-700 transition-all ${sub.state !== 'active' ? 'opacity-75' : ''}`}>
+                                {/* Icon */}
+                                <div className={`flex-shrink-0 h-16 w-16 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700 ${sub.state !== 'active' ? 'grayscale' : ''}`}>
+                                    <img
+                                        alt={sub.name}
+                                        className="w-8 h-8 object-contain"
+                                        src={sub.icon}
+                                    />
+                                </div>
+                                {/* Details */}
+                                <div className="flex-grow flex flex-col gap-1">
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                        <h3 className={`text-lg font-bold ${sub.state === 'cancelled' ? 'text-slate-400 strike-through line-through' : 'text-white'}`}>{sub.name}</h3>
+                                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusBadgeClass(sub.statusColor)}`}>{sub.status}</span>
+                                    </div>
+                                    <p className="text-slate-400 text-sm">{sub.description}</p>
+                                </div>
+                                {/* Cost & Date */}
+                                <div className="flex flex-row md:flex-col justify-between w-full md:w-auto md:text-right gap-1 items-center md:items-end border-t md:border-t-0 border-slate-800 pt-4 md:pt-0 mt-2 md:mt-0">
+                                    <span className="text-lg font-bold text-white">{formatCurrency(sub.cost)}<span className="text-sm font-normal text-slate-500">/mo</span></span>
+                                    {sub.state !== 'cancelled' ? (
+                                        <span className="text-xs text-slate-500 font-medium">{sub.nextAction}: {sub.dateStr}</span>
+                                    ) : (
+                                        <span className="text-xs text-red-500/70 font-medium">Cancelled</span>
+                                    )}
+                                </div>
+                                {/* Action */}
+                                <div className="flex-shrink-0 w-full md:w-auto relative">
+                                    {sub.state === 'active' ? (
+                                        <>
+                                            <button
+                                                onClick={() => toggleDropdown(sub.id)}
+                                                className="w-full md:w-auto px-6 py-2.5 rounded-full bg-slate-800 text-slate-300 font-bold text-sm hover:bg-primary hover:text-white transition-all border border-slate-700 hover:border-primary flex items-center justify-center gap-2 group/btn"
+                                            >
+                                                <span>Manage</span>
+                                                <span className="material-symbols-outlined text-[18px] group-hover/btn:rotate-90 transition-transform">expand_more</span>
+                                            </button>
+                                            {/* Dropdown */}
+                                            {openDropdown === sub.id && (
+                                                <div className="absolute right-0 top-full mt-2 w-48 bg-surface-dark rounded-xl shadow-xl border border-slate-700 p-2 z-20">
+                                                    <button onClick={() => handleAction(sub.id, 'upgrade')} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-primary transition-colors cursor-pointer">
+                                                        <span className="material-symbols-outlined text-[18px]">upgrade</span>
+                                                        Upgrade Plan
+                                                    </button>
+                                                    <button onClick={() => handleAction(sub.id, 'pause')} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-amber-500 transition-colors cursor-pointer">
+                                                        <span className="material-symbols-outlined text-[18px]">pause</span>
+                                                        Pause Subscription
+                                                    </button>
+                                                    <div className="h-px bg-slate-700 my-1"></div>
+                                                    <button onClick={() => handleAction(sub.id, 'cancel')} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer">
+                                                        <span className="material-symbols-outlined text-[18px]">cancel</span>
+                                                        Cancel Sub
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : sub.state === 'paused' ? (
+                                        <button onClick={() => handleAction(sub.id, 'resume')} className="w-full md:w-auto px-6 py-2.5 rounded-full bg-slate-800 text-slate-300 font-bold text-sm hover:bg-emerald-600 hover:text-white transition-all border border-slate-700 hover:border-emerald-500 flex items-center justify-center gap-2 group/btn">
+                                            <span>Resume</span>
+                                            <span className="material-symbols-outlined text-[18px]">play_arrow</span>
+                                        </button>
+                                    ) : (
+                                        <button onClick={() => handleAction(sub.id, 'resume')} className="w-full md:w-auto px-6 py-2.5 rounded-full bg-slate-800 text-slate-500 font-bold text-sm hover:bg-emerald-600 hover:text-white transition-all border border-slate-700 hover:border-emerald-500 flex items-center justify-center gap-2 group/btn">
+                                            <span>Restart</span>
+                                            <span className="material-symbols-outlined text-[18px]">restart_alt</span>
+                                        </button>
+                                    )}
+                                </div>
                             </div>
-                            <p className="text-slate-400 text-sm">Student Plan</p>
-                        </div>
-                        {/* Cost & Date */}
-                        <div className="flex flex-row md:flex-col justify-between w-full md:w-auto md:text-right gap-1 items-center md:items-end border-t md:border-t-0 border-slate-800 pt-4 md:pt-0 mt-2 md:mt-0">
-                            <span className="text-lg font-bold text-white">$4.99<span className="text-sm font-normal text-slate-500">/mo</span></span>
-                            <span className="text-xs text-slate-500 font-medium">Resumes: Dec 01, 2023</span>
-                        </div>
-                        {/* Action */}
-                        <div className="flex-shrink-0 w-full md:w-auto">
-                            <button className="w-full md:w-auto px-6 py-2.5 rounded-full bg-slate-800 text-slate-400 font-bold text-sm hover:bg-primary hover:text-white transition-all border border-slate-700 hover:border-primary flex items-center justify-center gap-2 group/btn">
-                                <span>Resume</span>
-                                <span className="material-symbols-outlined text-[18px]">play_arrow</span>
-                            </button>
-                        </div>
-                    </div>
+                        ))
+                    )}
                 </div>
             </section>
 
@@ -235,17 +342,17 @@ export default function ViewerDashboardPage() {
                 </div>
                 <div>
                     <h4 className="text-white font-bold text-sm">Did you know?</h4>
-                    <p className="text-slate-400 text-sm mt-1">You can save up to 20% by switching your Adobe Creative Cloud subscription to an annual plan. <a className="text-primary font-bold underline" href="#">Check annual pricing</a></p>
+                    <p className="text-slate-400 text-sm mt-1">You can save up to 20% by switching your Adobe Creative Cloud subscription to an annual plan. <Link to="/viewer/plans" className="text-primary font-bold hover:underline transition-all">Check annual pricing</Link></p>
                 </div>
             </div>
 
             {/* Footer for Content */}
             <footer className="mt-auto py-6 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center text-xs text-slate-500 gap-4">
-                <p>© 2023 Subscription Manager Inc. All rights reserved.</p>
+                <p>© 2026 Billabear Inc. All rights reserved.</p>
                 <div className="flex gap-6">
-                    <a className="hover:text-slate-300" href="#">Privacy Policy</a>
-                    <a className="hover:text-slate-300" href="#">Terms of Service</a>
-                    <a className="hover:text-slate-300" href="#">Help Center</a>
+                    <button className="hover:text-slate-300 transition-colors">Privacy Policy</button>
+                    <button className="hover:text-slate-300 transition-colors">Terms of Service</button>
+                    <button className="hover:text-slate-300 transition-colors">Help Center</button>
                 </div>
             </footer>
         </div>
