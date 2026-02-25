@@ -46,6 +46,8 @@ export default function LoginPage() {
                 navigate('/dashboard');
             } else if (data.user.role === 'viewer') {
                 navigate('/viewer');
+            } else if (data.user.role === 'billing') {
+                navigate('/billing');
             } else {
                 navigate(`/under-development?role=${data.user.role}`);
             }
