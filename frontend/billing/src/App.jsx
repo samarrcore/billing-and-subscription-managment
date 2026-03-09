@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-route
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import ViewerSidebar from './components/ViewerSidebar';
-import BillingSidebar from './components/BillingSidebar';
 import DashboardPage from './pages/DashboardPage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
 import PlansPage from './pages/PlansPage';
@@ -17,7 +16,6 @@ import ViewerPlansPage from './pages/ViewerPlansPage';
 import ViewerSettingsPage from './pages/ViewerSettingsPage';
 import ViewerBillingHistoryPage from './pages/ViewerBillingHistoryPage';
 import ViewerPaymentMethodsPage from './pages/ViewerPaymentMethodsPage';
-import BillingDashboardPage from './pages/BillingDashboardPage';
 
 const pageMeta = {
   '/dashboard': { title: 'Dashboard Overview', subtitle: 'Welcome back to your financial hub.' },
@@ -28,13 +26,22 @@ const pageMeta = {
   '/dashboard/settings': { title: 'Settings', subtitle: 'Configure your billing preferences.' },
 };
 
-const billingPageMeta = {
-  '/billing': { title: 'Billing Insights', subtitle: 'Overview of billing income and activity.' },
-  '/billing/invoices': { title: 'Invoices', subtitle: 'Manage and track all invoices.' },
-  '/billing/customers': { title: 'Customers', subtitle: 'View customer billing details.' },
-  '/billing/reports': { title: 'Reports', subtitle: 'Generate and view billing reports.' },
-  '/billing/settings': { title: 'Settings', subtitle: 'Configure billing portal preferences.' },
-};
+function getUserRole() {
+  try {
+    const user = JSON.parse(localStorage.getItem('billabear_user') || '{}');
+    return user.role || 'admin';
+  } catch {
+    return 'admin';
+  }
+}
+
+function AdminOnly({ children }) {
+  const role = getUserRole();
+  if (role !== 'admin') {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+}
 
 function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -57,41 +64,10 @@ function DashboardLayout() {
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/subscriptions" element={<SubscriptionsPage />} />
-            <Route path="/plans" element={<PlansPage />} />
+            <Route path="/plans" element={<AdminOnly><PlansPage /></AdminOnly>} />
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/invoices" element={<InvoicesPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
-        </div>
-      </main>
-    </div>
-  );
-}
-
-function BillingLayout() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const location = useLocation();
-
-  const meta = billingPageMeta[location.pathname] || billingPageMeta['/billing'];
-
-  return (
-    <div className="flex h-screen overflow-hidden bg-background-light dark:bg-background-dark">
-      <BillingSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background-light dark:bg-background-dark relative">
-        <Header
-          title={meta.title}
-          subtitle={meta.subtitle}
-          onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
-        />
-
-        <div className="flex-1 overflow-y-auto px-4 sm:px-8 pb-8">
-          <Routes>
-            <Route path="/" element={<BillingDashboardPage />} />
-            <Route path="/invoices" element={<UnderDevelopmentPage />} />
-            <Route path="/customers" element={<UnderDevelopmentPage />} />
-            <Route path="/reports" element={<UnderDevelopmentPage />} />
-            <Route path="/settings" element={<UnderDevelopmentPage />} />
+            <Route path="/settings" element={<AdminOnly><SettingsPage /></AdminOnly>} />
           </Routes>
         </div>
       </main>
@@ -142,7 +118,6 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/under-development" element={<UnderDevelopmentPage />} />
         <Route path="/dashboard/*" element={<DashboardLayout />} />
-        <Route path="/billing/*" element={<BillingLayout />} />
         <Route path="/viewer/*" element={<ViewerLayout />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />

@@ -73,7 +73,15 @@ app.post('/api/auth/login', (req, res) => {
     }
 
     // Check role match
-    if (user.role !== role) {
+    // 'team' role on login accepts both 'admin' and 'billing' users
+    if (role === 'team') {
+        if (user.role !== 'admin' && user.role !== 'billing') {
+            return res.status(403).json({
+                success: false,
+                message: `This account does not have team access. Your role is "${user.role}".`,
+            });
+        }
+    } else if (user.role !== role) {
         return res.status(403).json({
             success: false,
             message: `This account does not have ${role} access. Your role is "${user.role}".`,

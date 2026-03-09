@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const roles = [
-    { value: 'admin', label: 'Admin', icon: 'admin_panel_settings' },
-    { value: 'billing', label: 'Billing', icon: 'receipt_long' },
+    { value: 'team', label: 'Team', icon: 'groups' },
     { value: 'viewer', label: 'Viewer', icon: 'visibility' },
 ];
 
@@ -12,7 +11,7 @@ const API_BASE = 'http://localhost:3001';
 export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [selectedRole, setSelectedRole] = useState('admin');
+    const [selectedRole, setSelectedRole] = useState('team');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
@@ -42,12 +41,10 @@ export default function LoginPage() {
             localStorage.setItem('billabear_user', JSON.stringify(data.user));
 
             // Route based on role
-            if (data.user.role === 'admin') {
+            if (data.user.role === 'admin' || data.user.role === 'billing') {
                 navigate('/dashboard');
             } else if (data.user.role === 'viewer') {
                 navigate('/viewer');
-            } else if (data.user.role === 'billing') {
-                navigate('/billing');
             } else {
                 navigate(`/under-development?role=${data.user.role}`);
             }
