@@ -1,72 +1,44 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
-const initialSubscriptions = [
-    {
-        id: 'adobe',
-        name: 'Adobe Creative Cloud',
-        description: 'Design Pro Bundle • 1 User',
-        icon: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA2z8ekZlj6mSsQV_CfVnVCAKtTrZT-3w5f40DlzJEi4UUFbzlGulhU8JHioZr5JHOqTkwgoKGBbp0c9EypjsQJQx17ea23PJ8J7UV5gAzc1DW5ES83CBnsV7bAUwNofVrTQ2i1g7fboUUJW7L4IllmDyzJY03OvcEKvMWvnJZv3DgqVpPzSDoFZIx6Z0w2FpB4xoGJojQuhzwj5mWkbdnrwx1lp3dSstS4AWq_p2J1NAcBHEA3HCfRoJgBTRBs9F3bDxSW6ndYTYc',
-        status: 'Renews in 3 days',
-        statusColor: 'orange',
-        cost: 2499,
-        dateStr: 'Oct 24, 2023',
-        timestamp: new Date('2023-10-24').getTime(),
-        state: 'active',
-        nextAction: 'Next'
-    },
-    {
-        id: 'netflix',
-        name: 'Netflix',
-        description: 'Premium Ultra HD • 4 Screens',
-        icon: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD2lFOSvhpb-A2KzgdNTQ9Ng48LEyQUdcrbQqdOflhSdYZXz_r4o2CYpZjQUK25aD4wHriIDD2y1nTF0fvR4KBaO_izGqg_1C6hyXHaoY3y1uIfPv_bj16LiTOkzEgkPW0HB8nv5phm9m-SpHTkWU4RYr-_RwVlI6Ylk4dSDggmymurPOdDTmIOzUiY8pQNyOUyeFM3yhfimWzFzkmfokHxFJlbiV5jObBBXjl_EFe-2xSz4PJFK0GHJoeb2nACVPgbRUMvIEutCYI',
-        status: 'Active',
-        statusColor: 'green',
-        cost: 1349,
-        dateStr: 'Nov 02, 2023',
-        timestamp: new Date('2023-11-02').getTime(),
-        state: 'active',
-        nextAction: 'Next'
-    },
-    {
-        id: 'spotify',
-        name: 'Spotify',
-        description: 'Student Plan',
-        icon: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA5wgtJsEvLehpIsOm85_B8A1NvSz-JYNegfJYVr77EcWp_jAA116FpkH_rW8eFlmV2W1HNLSuQEGDiBTHG2EoNLfdTNukimEuFb9t5T1Jw16hlS4tziy_OS2fuKoWggh_QFoVlG9Roj1Db2WhBtmPyvK8gxmhnzhaTXdhaxPeTXHACw_0imMzVfmXeVvMy5-STRgKqxpZKP6L2rIWplVnB9GSQ6cndcBujUjeE3KohCwpe1hrkM9BKm2ybB3eE67C9QrPNl2UH0DQ',
-        status: 'Paused',
-        statusColor: 'slate',
-        cost: 419,
-        dateStr: 'Dec 01, 2023',
-        timestamp: new Date('2023-12-01').getTime(),
-        state: 'paused',
-        nextAction: 'Resumes'
-    }
-];
+const API_BASE = 'http://localhost:3001';
+const getAuthHeaders = () => ({
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${localStorage.getItem('billabear_token')}`,
+});
 
 export default function ViewerDashboardPage() {
     const navigate = useNavigate();
     const [openDropdown, setOpenDropdown] = useState(null);
-    const [subscriptions, setSubscriptions] = useState(initialSubscriptions);
-    const [sortOrder, setSortOrder] = useState('default'); // default, date, cost
-    const [filterState, setFilterState] = useState('all'); // all, active, paused
+    const [subscriptions, setSubscriptions] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [sortOrder, setSortOrder] = useState('default');
+    const [filterState, setFilterState] = useState('all');
 
-    // filter dropdown refs
     const filterRef = useRef(null);
     const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-
-    // sort dropdown refs
     const sortRef = useRef(null);
     const [showSortDropdown, setShowSortDropdown] = useState(false);
 
-    // Close dropdowns on outside click
+    // Fetch subscriptions from API
+    const fetchSubscriptions = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/viewer/subscriptions`, { headers: getAuthHeaders() });
+            const data = await res.json();
+            if (data.success) setSubscriptions(data.subscriptions);
+        } catch (err) {
+            console.error('Failed to fetch subscriptions:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchSubscriptions(); }, []);
+
     useEffect(() => {
         function handleClickOutside(e) {
-            if (filterRef.current && !filterRef.current.contains(e.target)) {
-                setShowFilterDropdown(false);
-            }
-            if (sortRef.current && !sortRef.current.contains(e.target)) {
-                setShowSortDropdown(false);
-            }
+            if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilterDropdown(false);
+            if (sortRef.current && !sortRef.current.contains(e.target)) setShowSortDropdown(false);
         }
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -76,42 +48,36 @@ export default function ViewerDashboardPage() {
         setOpenDropdown(openDropdown === id ? null : id);
     };
 
-    const handleAction = (id, action) => {
-        setSubscriptions(subs => subs.map(sub => {
-            if (sub.id !== id) return sub;
-            if (action === 'cancel') {
-                return { ...sub, status: 'Cancelled', state: 'cancelled', statusColor: 'red', nextAction: 'Cancelled' };
+    const handleAction = async (id, action) => {
+        try {
+            const res = await fetch(`${API_BASE}/api/viewer/subscriptions/${id}`, {
+                method: 'PUT',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ action }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                // Update local state with response
+                setSubscriptions(subs => subs.map(sub =>
+                    sub.id === id ? data.subscription : sub
+                ));
             }
-            if (action === 'pause') {
-                return { ...sub, status: 'Paused', state: 'paused', statusColor: 'slate', nextAction: 'Resumes' };
-            }
-            if (action === 'resume') {
-                return { ...sub, status: 'Active', state: 'active', statusColor: 'green', nextAction: 'Next' };
-            }
-            return sub;
-        }));
+        } catch (err) {
+            console.error('Failed to update subscription:', err);
+        }
         setOpenDropdown(null);
     };
 
     const totalSpend = subscriptions.filter(s => s.state === 'active').reduce((acc, curr) => acc + curr.cost, 0);
     const activePlansCount = subscriptions.filter(s => s.state === 'active').length;
-
-    // sort by timestamp ascending (earliest first)
     const activeSubsGtNow = subscriptions.filter(s => s.state === 'active').sort((a, b) => a.timestamp - b.timestamp);
     const nextBillingDateState = activeSubsGtNow.length > 0 ? activeSubsGtNow[0] : null;
 
     const filteredAndSortedSubs = useMemo(() => {
         let result = [...subscriptions];
-        // filter
-        if (filterState !== 'all') {
-            result = result.filter(s => s.state === filterState);
-        }
-        // sort
-        if (sortOrder === 'cost') {
-            result.sort((a, b) => b.cost - a.cost); // highest first
-        } else if (sortOrder === 'date') {
-            result.sort((a, b) => a.timestamp - b.timestamp); // earliest first
-        }
+        if (filterState !== 'all') result = result.filter(s => s.state === filterState);
+        if (sortOrder === 'cost') result.sort((a, b) => b.cost - a.cost);
+        else if (sortOrder === 'date') result.sort((a, b) => a.timestamp - b.timestamp);
         return result;
     }, [subscriptions, sortOrder, filterState]);
 
@@ -126,6 +92,20 @@ export default function ViewerDashboardPage() {
         if (color === 'red') return 'bg-red-500/10 text-red-400 border border-red-500/20';
         return 'bg-slate-800 text-slate-400 border border-slate-700';
     };
+
+    if (loading) {
+        return (
+            <div className="w-full max-w-[1200px] mx-auto p-6 lg:p-10 flex items-center justify-center min-h-[60vh]">
+                <div className="flex flex-col items-center gap-4">
+                    <svg className="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="text-slate-400 font-medium">Loading your subscriptions...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="w-full max-w-[1200px] mx-auto p-6 lg:p-10 flex flex-col gap-10">
@@ -150,15 +130,11 @@ export default function ViewerDashboardPage() {
 
             {/* Summary Cards */}
             <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Total Spend */}
                 <div className="bg-surface-dark p-6 lg:p-8 rounded-2xl shadow-lg shadow-black/10 flex flex-col justify-between h-full border border-slate-800 group transition-all">
                     <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 bg-primary/10 rounded-full text-primary">
-                            <span className="material-symbols-outlined">payments</span>
-                        </div>
+                        <div className="p-3 bg-primary/10 rounded-full text-primary"><span className="material-symbols-outlined">payments</span></div>
                         <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-bold flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[14px]">trending_up</span>
-                            +2.4%
+                            <span className="material-symbols-outlined text-[14px]">trending_up</span>+2.4%
                         </span>
                     </div>
                     <div>
@@ -167,15 +143,10 @@ export default function ViewerDashboardPage() {
                     </div>
                 </div>
 
-                {/* Next Billing */}
                 <div className="bg-surface-dark p-6 lg:p-8 rounded-2xl shadow-lg shadow-black/10 flex flex-col justify-between h-full border border-slate-800 group transition-all">
                     <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 bg-orange-500/10 rounded-full text-orange-400">
-                            <span className="material-symbols-outlined">event</span>
-                        </div>
-                        {nextBillingDateState && (
-                            <span className="px-3 py-1 rounded-full bg-slate-800 text-slate-400 text-xs font-bold">Upcoming</span>
-                        )}
+                        <div className="p-3 bg-orange-500/10 rounded-full text-orange-400"><span className="material-symbols-outlined">event</span></div>
+                        {nextBillingDateState && (<span className="px-3 py-1 rounded-full bg-slate-800 text-slate-400 text-xs font-bold">Upcoming</span>)}
                     </div>
                     <div>
                         <p className="text-slate-400 text-sm font-medium mb-1">Next Billing Date</p>
@@ -184,12 +155,9 @@ export default function ViewerDashboardPage() {
                     </div>
                 </div>
 
-                {/* Active Plans Count */}
                 <div className="bg-surface-dark p-6 lg:p-8 rounded-2xl shadow-lg shadow-black/10 flex flex-col justify-between h-full border border-slate-800 group transition-all">
                     <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 bg-purple-500/10 rounded-full text-purple-400">
-                            <span className="material-symbols-outlined">layers</span>
-                        </div>
+                        <div className="p-3 bg-purple-500/10 rounded-full text-purple-400"><span className="material-symbols-outlined">layers</span></div>
                         <button onClick={() => navigate('/viewer/plans')} className="text-primary text-sm font-bold hover:underline transition-all">View All Plans</button>
                     </div>
                     <div>
@@ -197,12 +165,7 @@ export default function ViewerDashboardPage() {
                         <p className="text-white text-2xl lg:text-3xl font-bold tracking-tight">{activePlansCount} Plans</p>
                         <div className="flex -space-x-2 mt-3 overflow-hidden">
                             {subscriptions.filter(s => s.state === 'active').slice(0, 3).map((sub) => (
-                                <img
-                                    key={sub.id}
-                                    alt={sub.name}
-                                    className="inline-block h-6 w-6 rounded-full ring-2 ring-surface-dark object-contain bg-slate-800 p-0.5"
-                                    src={sub.icon}
-                                />
+                                <img key={sub.id} alt={sub.name} className="inline-block h-6 w-6 rounded-full ring-2 ring-surface-dark object-contain bg-slate-800 p-0.5" src={sub.icon} />
                             ))}
                         </div>
                     </div>
@@ -214,7 +177,6 @@ export default function ViewerDashboardPage() {
                 <div className="flex items-center justify-between px-2">
                     <h2 className="text-white text-xl font-bold">Subscriptions</h2>
                     <div className="flex gap-2">
-                        {/* Filter Toggle */}
                         <div className="relative" ref={filterRef}>
                             <button onClick={() => setShowFilterDropdown(!showFilterDropdown)} className={`p-2 rounded-full transition-colors flex items-center justify-center ${filterState !== 'all' ? 'bg-primary/20 text-primary' : 'hover:bg-slate-800 text-slate-400'}`} title="Filter by Status">
                                 <span className="material-symbols-outlined">filter_list</span>
@@ -222,19 +184,13 @@ export default function ViewerDashboardPage() {
                             {showFilterDropdown && (
                                 <div className="absolute right-0 top-full mt-2 w-48 bg-surface-dark rounded-xl shadow-xl border border-slate-700 py-2 z-30">
                                     {['all', 'active', 'paused', 'cancelled'].map(opt => (
-                                        <button
-                                            key={opt}
-                                            onClick={() => { setFilterState(opt); setShowFilterDropdown(false); }}
-                                            className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors ${filterState === opt ? 'bg-primary/10 text-primary' : 'text-slate-300 hover:bg-slate-800'}`}
-                                        >
+                                        <button key={opt} onClick={() => { setFilterState(opt); setShowFilterDropdown(false); }} className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors ${filterState === opt ? 'bg-primary/10 text-primary' : 'text-slate-300 hover:bg-slate-800'}`}>
                                             {opt.charAt(0).toUpperCase() + opt.slice(1)}
                                         </button>
                                     ))}
                                 </div>
                             )}
                         </div>
-
-                        {/* Sort Toggle */}
                         <div className="relative" ref={sortRef}>
                             <button onClick={() => setShowSortDropdown(!showSortDropdown)} className={`p-2 rounded-full transition-colors flex items-center justify-center ${sortOrder !== 'default' ? 'bg-primary/20 text-primary' : 'hover:bg-slate-800 text-slate-400'}`} title="Sort Subscriptions">
                                 <span className="material-symbols-outlined">sort</span>
@@ -262,23 +218,16 @@ export default function ViewerDashboardPage() {
                     ) : (
                         filteredAndSortedSubs.map((sub) => (
                             <div key={sub.id} className={`bg-surface-dark rounded-2xl p-6 flex flex-col md:flex-row items-start md:items-center gap-6 shadow-lg shadow-black/10 border border-slate-800 hover:border-slate-700 transition-all ${sub.state !== 'active' ? 'opacity-75' : ''}`}>
-                                {/* Icon */}
                                 <div className={`flex-shrink-0 h-16 w-16 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700 ${sub.state !== 'active' ? 'grayscale' : ''}`}>
-                                    <img
-                                        alt={sub.name}
-                                        className="w-8 h-8 object-contain"
-                                        src={sub.icon}
-                                    />
+                                    <img alt={sub.name} className="w-8 h-8 object-contain" src={sub.icon} />
                                 </div>
-                                {/* Details */}
                                 <div className="flex-grow flex flex-col gap-1">
                                     <div className="flex items-center gap-3 flex-wrap">
-                                        <h3 className={`text-lg font-bold ${sub.state === 'cancelled' ? 'text-slate-400 strike-through line-through' : 'text-white'}`}>{sub.name}</h3>
+                                        <h3 className={`text-lg font-bold ${sub.state === 'cancelled' ? 'text-slate-400 line-through' : 'text-white'}`}>{sub.name}</h3>
                                         <span className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusBadgeClass(sub.statusColor)}`}>{sub.status}</span>
                                     </div>
                                     <p className="text-slate-400 text-sm">{sub.description}</p>
                                 </div>
-                                {/* Cost & Date */}
                                 <div className="flex flex-row md:flex-col justify-between w-full md:w-auto md:text-right gap-1 items-center md:items-end border-t md:border-t-0 border-slate-800 pt-4 md:pt-0 mt-2 md:mt-0">
                                     <span className="text-lg font-bold text-white">{formatCurrency(sub.cost)}<span className="text-sm font-normal text-slate-500">/mo</span></span>
                                     {sub.state !== 'cancelled' ? (
@@ -287,32 +236,21 @@ export default function ViewerDashboardPage() {
                                         <span className="text-xs text-red-500/70 font-medium">Cancelled</span>
                                     )}
                                 </div>
-                                {/* Action */}
                                 <div className="flex-shrink-0 w-full md:w-auto relative">
                                     {sub.state === 'active' ? (
                                         <>
-                                            <button
-                                                onClick={() => toggleDropdown(sub.id)}
-                                                className="w-full md:w-auto px-6 py-2.5 rounded-full bg-slate-800 text-slate-300 font-bold text-sm hover:bg-primary hover:text-white transition-all border border-slate-700 hover:border-primary flex items-center justify-center gap-2 group/btn"
-                                            >
+                                            <button onClick={() => toggleDropdown(sub.id)} className="w-full md:w-auto px-6 py-2.5 rounded-full bg-slate-800 text-slate-300 font-bold text-sm hover:bg-primary hover:text-white transition-all border border-slate-700 hover:border-primary flex items-center justify-center gap-2 group/btn">
                                                 <span>Manage</span>
                                                 <span className="material-symbols-outlined text-[18px] group-hover/btn:rotate-90 transition-transform">expand_more</span>
                                             </button>
-                                            {/* Dropdown */}
                                             {openDropdown === sub.id && (
                                                 <div className="absolute right-0 top-full mt-2 w-48 bg-surface-dark rounded-xl shadow-xl border border-slate-700 p-2 z-20">
-                                                    <button onClick={() => handleAction(sub.id, 'upgrade')} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-primary transition-colors cursor-pointer">
-                                                        <span className="material-symbols-outlined text-[18px]">upgrade</span>
-                                                        Upgrade Plan
-                                                    </button>
                                                     <button onClick={() => handleAction(sub.id, 'pause')} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-amber-500 transition-colors cursor-pointer">
-                                                        <span className="material-symbols-outlined text-[18px]">pause</span>
-                                                        Pause Subscription
+                                                        <span className="material-symbols-outlined text-[18px]">pause</span>Pause Subscription
                                                     </button>
                                                     <div className="h-px bg-slate-700 my-1"></div>
                                                     <button onClick={() => handleAction(sub.id, 'cancel')} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer">
-                                                        <span className="material-symbols-outlined text-[18px]">cancel</span>
-                                                        Cancel Sub
+                                                        <span className="material-symbols-outlined text-[18px]">cancel</span>Cancel Sub
                                                     </button>
                                                 </div>
                                             )}
@@ -346,7 +284,6 @@ export default function ViewerDashboardPage() {
                 </div>
             </div>
 
-            {/* Footer for Content */}
             <footer className="mt-auto py-6 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center text-xs text-slate-500 gap-4">
                 <p>© 2026 Billabear Inc. All rights reserved.</p>
                 <div className="flex gap-6">

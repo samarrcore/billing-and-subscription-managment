@@ -1,12 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-const initialSubscriptions = [
-    { id: 1, customer: 'Acme Corp', plan: 'Enterprise', status: 'Active', amount: '₹499.00/mo', nextBilling: '2026-03-15', startDate: '2025-03-15' },
-    { id: 2, customer: 'John Doe', plan: 'Pro', status: 'Active', amount: '₹120.00/mo', nextBilling: '2026-03-10', startDate: '2025-09-10' },
-    { id: 3, customer: 'Startup Inc', plan: 'Starter', status: 'Past Due', amount: '₹29.00/mo', nextBilling: '2026-02-20', startDate: '2025-06-20' },
-    { id: 4, customer: 'Design Lab', plan: 'Pro', status: 'Active', amount: '₹120.00/mo', nextBilling: '2026-03-01', startDate: '2025-01-01' },
-    { id: 5, customer: 'TechFlow', plan: 'Enterprise', status: 'Cancelled', amount: '₹499.00/mo', nextBilling: '—', startDate: '2024-11-15' },
-];
+const API_BASE = 'http://localhost:3001';
+const getAuthHeaders = () => ({
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${localStorage.getItem('billabear_token')}`,
+});
 
 const statusStyles = {
     Active: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
@@ -15,24 +13,67 @@ const statusStyles = {
 };
 
 export default function SubscriptionsPage() {
-    const [subscriptions, setSubscriptions] = useState(initialSubscriptions);
+    const [subscriptions, setSubscriptions] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('All');
     const [showCancelModal, setShowCancelModal] = useState(null);
 
+    const fetchSubscriptions = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/data/subscriptions`, { headers: getAuthHeaders() });
+            const data = await res.json();
+            if (data.success) setSubscriptions(data.subscriptions);
+        } catch (err) {
+            console.error('Failed to fetch subscriptions:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchSubscriptions(); }, []);
+
     const filtered = filter === 'All' ? subscriptions : subscriptions.filter((s) => s.status === filter);
 
-    const handleCancel = (id) => {
-        setSubscriptions((prev) =>
-            prev.map((s) => (s.id === id ? { ...s, status: 'Cancelled', nextBilling: '—' } : s))
-        );
+    const handleCancel = async (id) => {
+        try {
+            await fetch(`${API_BASE}/api/data/subscriptions/${id}`, {
+                method: 'PUT',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ action: 'cancel' }),
+            });
+            await fetchSubscriptions();
+        } catch (err) {
+            console.error('Failed to cancel subscription:', err);
+        }
         setShowCancelModal(null);
     };
 
-    const handleReactivate = (id) => {
-        setSubscriptions((prev) =>
-            prev.map((s) => (s.id === id ? { ...s, status: 'Active', nextBilling: '2026-04-01' } : s))
-        );
+    const handleReactivate = async (id) => {
+        try {
+            await fetch(`${API_BASE}/api/data/subscriptions/${id}`, {
+                method: 'PUT',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ action: 'reactivate' }),
+            });
+            await fetchSubscriptions();
+        } catch (err) {
+            console.error('Failed to reactivate subscription:', err);
+        }
     };
+
+    if (loading) {
+        return (
+            <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[40vh]">
+                <div className="flex flex-col items-center gap-4">
+                    <svg className="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="text-slate-500 dark:text-slate-400 font-medium">Loading subscriptions...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-7xl mx-auto space-y-6">
@@ -40,7 +81,7 @@ export default function SubscriptionsPage() {
                 <div>
                     <h2 className="text-xl font-bold text-slate-900 dark:text-white">All Subscriptions</h2>
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                        Manage and monitor all customer subscriptions
+                        {subscriptions.length} total subscriptions • Manage and monitor all customer subscriptions
                     </p>
                 </div>
                 <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-full">
@@ -82,7 +123,7 @@ export default function SubscriptionsPage() {
                                         {sub.plan}
                                     </td>
                                     <td className="px-6 py-5 whitespace-nowrap">
-                                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold ${statusStyles[sub.status]}`}>
+                                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold ${statusStyles[sub.status] || statusStyles['Cancelled']}`}>
                                             {sub.status}
                                         </span>
                                     </td>
