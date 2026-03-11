@@ -477,6 +477,93 @@ app.put('/api/viewer/subscriptions/:id', requireAuth, requireRole('viewer'), (re
     res.json({ success: true, message: `Subscription ${action}d.`, subscription: sub });
 });
 
+// ─── Viewer: Available Plans ─────────────────────────────────
+app.get('/api/viewer/plans', requireAuth, requireRole('viewer'), (req, res) => {
+    // Return the Billabear plans with features so viewers can upgrade/downgrade
+    const result = plans.map((p) => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        period: p.period,
+        features: p.features,
+        color: p.color,
+        popular: p.popular,
+    }));
+    res.json({ success: true, plans: result });
+});
+
+// ─── Viewer: Change Subscription Plan (Upgrade/Downgrade) ────
+app.put('/api/viewer/subscriptions/:id/change-plan', requireAuth, requireRole('viewer'), (req, res) => {
+    const sub = viewerSubscriptions.find((s) => s.id === parseInt(req.params.id) && s.userId === req.user.id);
+    if (!sub) return res.status(404).json({ success: false, message: 'Subscription not found.' });
+
+    const { planId } = req.body;
+    const newPlan = plans.find((p) => p.id === parseInt(planId));
+    if (!newPlan) return res.status(400).json({ success: false, message: 'Invalid plan selected.' });
+
+    const oldCost = sub.cost;
+    const oldPlanName = sub.description?.split('•')[0]?.trim() || sub.name;
+
+    // ── Prorated billing logic ──────────────────────────────
+    const now = new Date();
+    const billingDate = new Date(sub.dateStr);
+    // Move billing date to next occurrence
+    while (billingDate <= now) billingDate.setMonth(billingDate.getMonth() + 1);
+    const cycleStart = new Date(billingDate);
+    cycleStart.setMonth(cycleStart.getMonth() - 1);
+
+    const totalDays = Math.round((billingDate - cycleStart) / (1000 * 60 * 60 * 24));
+    const daysRemaining = Math.max(1, Math.round((billingDate - now) / (1000 * 60 * 60 * 24)));
+    const dailyRateOld = oldCost / totalDays;
+    const dailyRateNew = newPlan.price / totalDays;
+
+    const creditFromOld = +(dailyRateOld * daysRemaining).toFixed(2);
+    const chargeForNew = +(dailyRateNew * daysRemaining).toFixed(2);
+    const prorationAmount = +(chargeForNew - creditFromOld).toFixed(2);
+
+    const isUpgrade = newPlan.price > oldCost;
+
+    // Update the subscription
+    sub.cost = newPlan.price;
+    sub.description = `${newPlan.name} Plan • 1 User`;
+
+    // Format next billing date
+    const nextBilling = billingDate.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+    sub.dateStr = nextBilling;
+    sub.timestamp = billingDate.getTime();
+
+    // Log activity visible to admin
+    const initials = req.user.name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
+    addActivity({
+        status: isUpgrade ? 'Upgraded' : 'Downgraded',
+        statusColor: isUpgrade ? 'emerald' : 'orange',
+        name: req.user.name,
+        email: req.user.email,
+        initials,
+        eventType: `${sub.name} ${isUpgrade ? 'Upgraded' : 'Downgraded'} to ${newPlan.name}`,
+        amount: newPlan.price,
+    });
+
+    res.json({
+        success: true,
+        message: `Subscription ${isUpgrade ? 'upgraded' : 'downgraded'} to ${newPlan.name}.`,
+        subscription: sub,
+        proration: {
+            isUpgrade,
+            oldPlan: oldPlanName,
+            newPlan: newPlan.name,
+            oldPrice: oldCost,
+            newPrice: newPlan.price,
+            daysRemaining,
+            totalDays,
+            creditFromOld,
+            chargeForNew,
+            prorationAmount,
+            nextBillingDate: nextBilling,
+        },
+    });
+});
+
 app.get('/api/viewer/invoices', requireAuth, requireRole('viewer'), (req, res) => {
     // Generate viewer-specific invoices from their subscriptions
     const subs = viewerSubscriptions.filter((s) => s.userId === req.user.id);

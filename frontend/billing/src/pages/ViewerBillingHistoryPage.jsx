@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import generateInvoicePDF from '../utils/generateInvoicePDF';
 
 const API_BASE = 'http://localhost:3001';
 const getAuthHeaders = () => ({
@@ -8,39 +9,7 @@ const getAuthHeaders = () => ({
 });
 
 function downloadInvoice(invoice) {
-    const user = JSON.parse(localStorage.getItem('billabear_user') || '{}');
-    const content = [
-        '════════════════════════════════════════════',
-        '              RECEIPT',
-        '════════════════════════════════════════════',
-        '',
-        `  Invoice ID:   ${invoice.id}`,
-        `  Date:         ${invoice.date}`,
-        `  Plan:         ${invoice.plan}`,
-        `  Amount:       ₹${new Intl.NumberFormat('en-IN').format(invoice.amount)}`,
-        `  Status:       ${invoice.status.toUpperCase()}`,
-        `  Method:       ${invoice.paymentMethod}`,
-        '',
-        '────────────────────────────────────────────',
-        `  Billed To:    ${user.name || 'Viewer'}`,
-        `  Email:        ${user.email || 'viewer@billabear.com'}`,
-        '────────────────────────────────────────────',
-        '',
-        '════════════════════════════════════════════',
-        '  Thank you for your payment!',
-        '  Billabear Subscription Services',
-        '════════════════════════════════════════════',
-    ].join('\n');
-
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${invoice.id}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    generateInvoicePDF(invoice);
 }
 
 export default function ViewerBillingHistoryPage() {

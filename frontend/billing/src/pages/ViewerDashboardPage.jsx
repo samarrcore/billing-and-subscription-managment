@@ -20,6 +20,13 @@ export default function ViewerDashboardPage() {
     const sortRef = useRef(null);
     const [showSortDropdown, setShowSortDropdown] = useState(false);
 
+    // Plan change state
+    const [changePlanModal, setChangePlanModal] = useState(null); // subId
+    const [availablePlans, setAvailablePlans] = useState([]);
+    const [selectedPlan, setSelectedPlan] = useState(null);
+    const [changingPlan, setChangingPlan] = useState(false);
+    const [prorationResult, setProrationResult] = useState(null);
+
     // Fetch subscriptions from API
     const fetchSubscriptions = async () => {
         try {
@@ -57,7 +64,6 @@ export default function ViewerDashboardPage() {
             });
             const data = await res.json();
             if (data.success) {
-                // Update local state with response
                 setSubscriptions(subs => subs.map(sub =>
                     sub.id === id ? data.subscription : sub
                 ));
@@ -66,6 +72,43 @@ export default function ViewerDashboardPage() {
             console.error('Failed to update subscription:', err);
         }
         setOpenDropdown(null);
+    };
+
+    const openChangePlan = async (subId) => {
+        setOpenDropdown(null);
+        setChangePlanModal(subId);
+        setSelectedPlan(null);
+        setProrationResult(null);
+        try {
+            const res = await fetch(`${API_BASE}/api/viewer/plans`, { headers: getAuthHeaders() });
+            const data = await res.json();
+            if (data.success) setAvailablePlans(data.plans);
+        } catch (err) {
+            console.error('Failed to fetch plans:', err);
+        }
+    };
+
+    const confirmChangePlan = async () => {
+        if (!selectedPlan || !changePlanModal) return;
+        setChangingPlan(true);
+        try {
+            const res = await fetch(`${API_BASE}/api/viewer/subscriptions/${changePlanModal}/change-plan`, {
+                method: 'PUT',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ planId: selectedPlan }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setProrationResult(data.proration);
+                setSubscriptions(subs => subs.map(sub =>
+                    sub.id === changePlanModal ? data.subscription : sub
+                ));
+            }
+        } catch (err) {
+            console.error('Failed to change plan:', err);
+        } finally {
+            setChangingPlan(false);
+        }
     };
 
     const totalSpend = subscriptions.filter(s => s.state === 'active').reduce((acc, curr) => acc + curr.cost, 0);
@@ -92,6 +135,9 @@ export default function ViewerDashboardPage() {
         if (color === 'red') return 'bg-red-500/10 text-red-400 border border-red-500/20';
         return 'bg-slate-800 text-slate-400 border border-slate-700';
     };
+
+    // Current sub being changed
+    const changingSub = subscriptions.find(s => s.id === changePlanModal);
 
     if (loading) {
         return (
@@ -244,7 +290,11 @@ export default function ViewerDashboardPage() {
                                                 <span className="material-symbols-outlined text-[18px] group-hover/btn:rotate-90 transition-transform">expand_more</span>
                                             </button>
                                             {openDropdown === sub.id && (
-                                                <div className="absolute right-0 top-full mt-2 w-48 bg-surface-dark rounded-xl shadow-xl border border-slate-700 p-2 z-20">
+                                                <div className="absolute right-0 top-full mt-2 w-56 bg-surface-dark rounded-xl shadow-xl border border-slate-700 p-2 z-20">
+                                                    <button onClick={() => openChangePlan(sub.id)} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-primary transition-colors cursor-pointer">
+                                                        <span className="material-symbols-outlined text-[18px]">swap_vert</span>Change Plan
+                                                    </button>
+                                                    <div className="h-px bg-slate-700 my-1"></div>
                                                     <button onClick={() => handleAction(sub.id, 'pause')} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-amber-500 transition-colors cursor-pointer">
                                                         <span className="material-symbols-outlined text-[18px]">pause</span>Pause Subscription
                                                     </button>
@@ -292,6 +342,169 @@ export default function ViewerDashboardPage() {
                     <button className="hover:text-slate-300 transition-colors">Help Center</button>
                 </div>
             </footer>
+
+            {/* ── Change Plan Modal ─────────────────────────────────── */}
+            {changePlanModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { setChangePlanModal(null); setProrationResult(null); }}>
+                    <div className="bg-surface-dark rounded-3xl border border-slate-700 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        {/* Modal Header */}
+                        <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-primary">swap_vert</span>
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-white">Change Plan</h3>
+                                    <p className="text-sm text-slate-400">{changingSub?.name}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => { setChangePlanModal(null); setProrationResult(null); }} className="w-8 h-8 rounded-full hover:bg-slate-800 flex items-center justify-center text-slate-400 transition-colors">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        {/* Proration Success Result */}
+                        {prorationResult ? (
+                            <div className="p-6 space-y-6">
+                                <div className="text-center py-4">
+                                    <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+                                        <span className="material-symbols-outlined text-emerald-400 text-3xl">check_circle</span>
+                                    </div>
+                                    <h4 className="text-xl font-bold text-white mb-1">
+                                        Plan {prorationResult.isUpgrade ? 'Upgraded' : 'Downgraded'}!
+                                    </h4>
+                                    <p className="text-slate-400">
+                                        {prorationResult.oldPlan} → {prorationResult.newPlan}
+                                    </p>
+                                </div>
+
+                                <div className="bg-slate-800/50 rounded-2xl p-5 space-y-3">
+                                    <h5 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3">Proration Details</h5>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-400">Days remaining in cycle</span>
+                                        <span className="text-white font-medium">{prorationResult.daysRemaining} of {prorationResult.totalDays} days</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-400">Credit from {prorationResult.oldPlan}</span>
+                                        <span className="text-emerald-400 font-medium">-{formatCurrency(prorationResult.creditFromOld)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-400">Charge for {prorationResult.newPlan}</span>
+                                        <span className="text-white font-medium">+{formatCurrency(prorationResult.chargeForNew)}</span>
+                                    </div>
+                                    <div className="border-t border-slate-700 pt-3 flex justify-between">
+                                        <span className="text-white font-bold">Net adjustment</span>
+                                        <span className={`font-bold text-lg ${prorationResult.prorationAmount >= 0 ? 'text-white' : 'text-emerald-400'}`}>
+                                            {prorationResult.prorationAmount >= 0 ? '+' : ''}{formatCurrency(prorationResult.prorationAmount)}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between text-sm pt-1">
+                                        <span className="text-slate-400">New monthly price</span>
+                                        <span className="text-white font-bold">{formatCurrency(prorationResult.newPrice)}/mo</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-400">Next billing date</span>
+                                        <span className="text-white font-medium">{prorationResult.nextBillingDate}</span>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => { setChangePlanModal(null); setProrationResult(null); }}
+                                    className="w-full py-3 bg-primary hover:bg-primary-dark text-white rounded-full font-bold text-sm transition-all"
+                                >
+                                    Done
+                                </button>
+                            </div>
+                        ) : (
+                            /* Plan Selection */
+                            <div className="p-6 space-y-4">
+                                <p className="text-sm text-slate-400 mb-2">
+                                    Current plan: <span className="text-white font-semibold">{changingSub?.description}</span> at <span className="text-white font-semibold">{changingSub && formatCurrency(changingSub.cost)}/mo</span>
+                                </p>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    {availablePlans.map((plan) => {
+                                        const isCurrent = changingSub && plan.price === changingSub.cost;
+                                        const isSelected = selectedPlan === plan.id;
+                                        const isUpgrade = changingSub && plan.price > changingSub.cost;
+                                        return (
+                                            <button
+                                                key={plan.id}
+                                                disabled={isCurrent}
+                                                onClick={() => setSelectedPlan(plan.id)}
+                                                className={`relative text-left p-5 rounded-2xl border-2 transition-all ${
+                                                    isCurrent
+                                                        ? 'border-slate-700 bg-slate-800/50 opacity-50 cursor-not-allowed'
+                                                        : isSelected
+                                                            ? 'border-primary bg-primary/5 shadow-lg shadow-primary/10'
+                                                            : 'border-slate-700 bg-slate-800/30 hover:border-slate-600 cursor-pointer'
+                                                }`}
+                                            >
+                                                {isCurrent && (
+                                                    <span className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-700 px-2 py-0.5 rounded-full">Current</span>
+                                                )}
+                                                {plan.popular && !isCurrent && (
+                                                    <span className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">Popular</span>
+                                                )}
+                                                <h4 className="text-white font-bold text-sm mb-1">{plan.name}</h4>
+                                                <p className="text-2xl font-extrabold text-white mb-1">
+                                                    {formatCurrency(plan.price)}
+                                                    <span className="text-sm font-normal text-slate-500">{plan.period}</span>
+                                                </p>
+                                                {!isCurrent && (
+                                                    <span className={`text-xs font-bold ${isUpgrade ? 'text-emerald-400' : 'text-orange-400'}`}>
+                                                        {isUpgrade ? '↑ Upgrade' : '↓ Downgrade'}
+                                                    </span>
+                                                )}
+                                                <ul className="mt-3 space-y-1.5">
+                                                    {plan.features.slice(0, 3).map((f, i) => (
+                                                        <li key={i} className="text-xs text-slate-400 flex items-center gap-1.5">
+                                                            <span className="material-symbols-outlined text-[14px] text-emerald-500">check</span>
+                                                            {f}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                {selectedPlan && (
+                                    <div className="bg-slate-800/50 rounded-xl p-4 flex items-center justify-between">
+                                        <div className="text-sm text-slate-300">
+                                            <span className="text-white font-semibold">{availablePlans.find(p => p.id === selectedPlan)?.name}</span> — your billing will be prorated automatically
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex items-center gap-3 pt-2">
+                                    <button
+                                        onClick={() => { setChangePlanModal(null); setProrationResult(null); }}
+                                        className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-full font-bold text-sm transition-all"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={confirmChangePlan}
+                                        disabled={!selectedPlan || changingPlan}
+                                        className="flex-1 py-3 bg-primary hover:bg-primary-dark text-white rounded-full font-bold text-sm transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    >
+                                        {changingPlan ? (
+                                            <>
+                                                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Processing...
+                                            </>
+                                        ) : 'Confirm Change'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
