@@ -1,13 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-const initialCustomers = [
-    { id: 1, name: 'Acme Corp', email: 'enterprise@acme.com', initials: 'AC', plan: 'Enterprise', status: 'Active', totalSpent: '₹5,988.00', joined: '2025-03-15' },
-    { id: 2, name: 'John Doe', email: 'john@example.com', initials: 'JD', plan: 'Pro', status: 'Active', totalSpent: '₹720.00', joined: '2025-09-10' },
-    { id: 3, name: 'Startup Inc', email: 'billing@startup.io', initials: 'SI', plan: 'Starter', status: 'Past Due', totalSpent: '₹261.00', joined: '2025-06-20' },
-    { id: 4, name: 'Design Lab', email: 'hello@designlab.co', initials: 'DL', plan: 'Pro', status: 'Active', totalSpent: '₹1,680.00', joined: '2025-01-01' },
-    { id: 5, name: 'TechFlow', email: 'team@techflow.dev', initials: 'TF', plan: 'Enterprise', status: 'Churned', totalSpent: '₹2,495.00', joined: '2024-11-15' },
-    { id: 6, name: 'CloudBase', email: 'admin@cloudbase.io', initials: 'CB', plan: 'Pro', status: 'Active', totalSpent: '₹960.00', joined: '2025-05-01' },
-];
+const API_BASE = 'http://localhost:3001';
+const getAuthHeaders = () => ({
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${localStorage.getItem('billabear_token')}`,
+});
 
 const statusStyles = {
     Active: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
@@ -16,15 +13,45 @@ const statusStyles = {
 };
 
 export default function CustomersPage() {
-    const [customers] = useState(initialCustomers);
+    const [customers, setCustomers] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [selectedCustomer, setSelectedCustomer] = useState(null);
+
+    useEffect(() => {
+        const fetchCustomers = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/data/customers`, { headers: getAuthHeaders() });
+                const data = await res.json();
+                if (data.success) setCustomers(data.customers);
+            } catch (err) {
+                console.error('Failed to fetch customers:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchCustomers();
+    }, []);
 
     const filtered = customers.filter(
         (c) =>
             c.name.toLowerCase().includes(search.toLowerCase()) ||
             c.email.toLowerCase().includes(search.toLowerCase())
     );
+
+    if (loading) {
+        return (
+            <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[40vh]">
+                <div className="flex flex-col items-center gap-4">
+                    <svg className="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="text-slate-500 dark:text-slate-400 font-medium">Loading customers...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-7xl mx-auto space-y-6">
@@ -83,7 +110,7 @@ export default function CustomersPage() {
                                         {customer.plan}
                                     </td>
                                     <td className="px-6 py-5 whitespace-nowrap">
-                                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold ${statusStyles[customer.status]}`}>
+                                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold ${statusStyles[customer.status] || statusStyles['Churned']}`}>
                                             {customer.status}
                                         </span>
                                     </td>

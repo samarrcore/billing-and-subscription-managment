@@ -1,16 +1,14 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
-const allInvoices = [
-    { date: 'Oct 24, 2023', id: 'INV-882910', amount: 1299, plan: 'Pro Monthly Plan', paymentMethod: 'Visa **** 4242', status: 'paid', statusColor: 'emerald' },
-    { date: 'Sep 24, 2023', id: 'INV-882754', amount: 14499, plan: 'Business Annual', paymentMethod: 'Mastercard **** 8812', status: 'failed', statusColor: 'rose', errorInfo: 'Insufficient funds. Try another card.' },
-    { date: 'Aug 24, 2023', id: 'INV-882611', amount: 499, plan: 'Storage Add-on', paymentMethod: 'Visa **** 4242', status: 'pending', statusColor: 'amber' },
-    { date: 'Jul 24, 2023', id: 'INV-882509', amount: 1299, plan: 'Pro Monthly Plan', paymentMethod: 'Visa **** 4242', status: 'paid', statusColor: 'emerald' },
-    { date: 'Jun 24, 2023', id: 'INV-882400', amount: 1299, plan: 'Pro Monthly Plan', paymentMethod: 'Visa **** 4242', status: 'paid', statusColor: 'emerald' },
-    { date: 'May 24, 2023', id: 'INV-882205', amount: 1299, plan: 'Pro Monthly Plan', paymentMethod: 'Visa **** 4242', status: 'paid', statusColor: 'emerald' },
-];
+const API_BASE = 'http://localhost:3001';
+const getAuthHeaders = () => ({
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${localStorage.getItem('billabear_token')}`,
+});
 
 function downloadInvoice(invoice) {
+    const user = JSON.parse(localStorage.getItem('billabear_user') || '{}');
     const content = [
         '════════════════════════════════════════════',
         '              RECEIPT',
@@ -24,8 +22,8 @@ function downloadInvoice(invoice) {
         `  Method:       ${invoice.paymentMethod}`,
         '',
         '────────────────────────────────────────────',
-        '  Billed To:    Alex Morgan',
-        '  Email:        viewer@billabear.com',
+        `  Billed To:    ${user.name || 'Viewer'}`,
+        `  Email:        ${user.email || 'viewer@billabear.com'}`,
         '────────────────────────────────────────────',
         '',
         '════════════════════════════════════════════',
@@ -46,8 +44,25 @@ function downloadInvoice(invoice) {
 }
 
 export default function ViewerBillingHistoryPage() {
+    const [allInvoices, setAllInvoices] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+
+    useEffect(() => {
+        const fetchHistory = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/viewer/billing-history`, { headers: getAuthHeaders() });
+                const data = await res.json();
+                if (data.success) setAllInvoices(data.invoices);
+            } catch (err) {
+                console.error('Failed to fetch billing history:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchHistory();
+    }, []);
 
     const formatCurrency = (amount) => {
         return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount);
@@ -63,7 +78,21 @@ export default function ViewerBillingHistoryPage() {
             results = results.filter((inv) => inv.status === statusFilter);
         }
         return results;
-    }, [searchQuery, statusFilter]);
+    }, [allInvoices, searchQuery, statusFilter]);
+
+    if (loading) {
+        return (
+            <div className="w-full max-w-[1200px] mx-auto p-6 lg:p-10 flex items-center justify-center min-h-[60vh]">
+                <div className="flex flex-col items-center gap-4">
+                    <svg className="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="text-slate-400 font-medium">Loading billing history...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="w-full max-w-[1200px] mx-auto p-6 lg:p-10 flex flex-col min-h-full">
@@ -95,7 +124,6 @@ export default function ViewerBillingHistoryPage() {
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
-
                     <div className="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 custom-scrollbar">
                         <button className="flex shrink-0 items-center justify-center gap-2 rounded-full border border-slate-700 bg-background-dark hover:bg-slate-800 px-5 py-3 text-sm font-semibold text-slate-300 transition-colors">
                             <span className="material-symbols-outlined text-[18px]">calendar_today</span>
@@ -147,8 +175,6 @@ export default function ViewerBillingHistoryPage() {
                                             </span>
                                         </div>
                                     </div>
-
-                                    {/* Action Row */}
                                     <div className="mt-4 flex items-center justify-between border-t border-slate-800 pt-5">
                                         {invoice.status === 'failed' && invoice.errorInfo ? (
                                             <p className="text-xs text-rose-400 flex items-center gap-1.5 font-medium">
@@ -161,7 +187,6 @@ export default function ViewerBillingHistoryPage() {
                                                 View {invoice.status === 'pending' ? 'Details' : 'Receipt'}
                                             </button>
                                         )}
-
                                         {invoice.status === 'failed' ? (
                                             <button className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors" title="Retry Payment">
                                                 <span className="material-symbols-outlined text-[20px]">refresh</span>
@@ -177,16 +202,7 @@ export default function ViewerBillingHistoryPage() {
                         </div>
                     )}
                 </div>
-
-                {/* Pagination */}
-                <div className="flex items-center justify-center pt-2">
-                    <button className="flex items-center gap-2 rounded-full border border-slate-700 bg-background-dark hover:bg-slate-800 px-6 py-3 text-sm font-bold text-slate-300 transition-all shadow-sm">
-                        Load more activity
-                        <span className="material-symbols-outlined text-[18px]">expand_more</span>
-                    </button>
-                </div>
             </div>
-
         </div>
     );
 }
